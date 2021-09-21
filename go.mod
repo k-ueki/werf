@@ -106,3 +106,5 @@ replace github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.3.2+inc
 replace k8s.io/helm => github.com/werf/helm v0.0.0-20210202111118-81e74d46da0f
 
 replace helm.sh/helm/v3 => github.com/werf/helm/v3 v3.0.0-20210831144243-7dcadcc35336
+
+replace github.com/containers/buildah => ../../containers/buildah
