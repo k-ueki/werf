@@ -12,19 +12,10 @@ import (
 	"github.com/werf/werf/pkg/buildah"
 )
 
-var buildahInstance *buildah.Buildah
-
 func init() {
 	logrus.SetLevel(logrus.TraceLevel)
 
 	unshare.MaybeReexecUsingUserNamespace(false)
-
-	b, err := buildah.NewBuildah()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	buildahInstance = b
 }
 
 func main() {
@@ -32,23 +23,45 @@ func main() {
 		return
 	}
 
-	// if err := do(); err != nil {
-	// 	fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
-	// }
+	b, err := buildah.NewBuildah(buildah.ModeNativeRootless)
+	if err != nil {
+		panic(err.Error())
+	}
 
-	if imageId, err := do2(); err != nil {
+	if err := do(b); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
+	}
+
+	if imageId, err := do2(b); err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
 	} else {
 		fmt.Fprintf(os.Stdout, "INFO: imageId is %s\n", imageId)
 	}
 }
 
-func do() error {
-	return buildahInstance.RunCommand(context.Background(), "build-container", []string{"ls"}, buildah.RunCommandOpts{})
+func do(b buildah.Buildah) error {
+	return b.RunCommand(context.Background(), "build-container", []string{"ls"}, buildah.RunCommandOpts{})
 }
-func do2() (string, error) {
-	return buildahInstance.BuildFromDockerfile(context.Background(), buildah.BuildFromDockerfileOpts{
-		ContextTarPath:    filepath.Join(os.Getenv("HOME"), "/tmp/werf-buildah/context.tar"),
-		DockerfileRelPath: filepath.Join(os.Getenv("HOME"), "/tmp/werf-buildah/Dockerfile"),
-	})
+
+func do2(b buildah.Buildah) (string, error) {
+	tarFileReader, err := os.Open(filepath.Join(os.Getenv("HOME"), "/tmp/werf-buildah/context.tar"))
+	if err != nil {
+		return "", err
+	}
+	defer tarFileReader.Close()
+
+	dockerfileContent, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), "/tmp/werf-buildah/Dockerfile"))
+	if err != nil {
+		return "", err
+	}
+
+	return b.BuildFromDockerfile(
+		context.Background(),
+		buildah.Dockerfile{
+			Content:        dockerfileContent,
+			ContextRelPath: "Dockerfile",
+		},
+		buildah.BuildFromDockerfileOpts{
+			ContextTar: tarFileReader,
+		})
 }

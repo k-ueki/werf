@@ -2,12 +2,14 @@ package buildah
 
 import (
 	"context"
+	"fmt"
 	"io"
 
-	"github.com/docker/docker/pkg/reexec"
-
 	"github.com/containers/storage/pkg/unshare"
+	"github.com/docker/docker/pkg/reexec"
 )
+
+const DefaultShmSize = "65536k"
 
 type CommonOpts struct {
 	LogWriter io.Writer
@@ -23,55 +25,57 @@ type RunCommandOpts struct {
 	BuildArgs []string
 }
 
+type Dockerfile struct {
+	Content        []byte
+	ContextRelPath string
+}
+
 type Buildah interface {
-	BuildFromDockerfile(ctx context.Context, dockerfile []byte, opts BuildFromDockerfileOpts) (string, error)
+	BuildFromDockerfile(ctx context.Context, dockerfile Dockerfile, opts BuildFromDockerfileOpts) (string, error)
 	RunCommand(ctx context.Context, container string, command []string, opts RunCommandOpts) error
 }
 
-type BuildahMode string
+type Mode int
 
-var (
-	NativeRootless BuildahMode = "NativeRootless"
-	DockerWithFuse BuildahMode = "DockerWithFuse"
+const (
+	ModeAuto Mode = iota
+	ModeNativeRootless
+	ModeDockerWithFuse
 )
 
-type NewBuildahOpts struct {
-	Mode BuildahMode
-}
-
-func NewBuildah(mode BuildahMode) (Buildah, error) {
+func NewBuildah(mode Mode) (Buildah, error) {
 	switch mode {
-	case "":
+	case ModeAuto:
 		// TODO: auto select based on OS
-	case NativeRootless:
+		return nil, nil
+	case ModeNativeRootless:
 		// TODO: validate selected mode with OS
-	case DockerWithFuse:
+		buildah, err := NewNativeRootlessBuildah()
+		if err != nil {
+			return nil, fmt.Errorf("unable to create new Buildah instance with mode %d: %s", mode, err)
+		}
+		return buildah, nil
+	case ModeDockerWithFuse:
 		// TODO: validate selected mode with OS
-	}
-
-	switch mode {
-	case NativeRootless:
-		return NewNativeRootlessBuildah()
-	case DockerWithFuse:
 		return NewDockerWithFuseBuildah()
 	default:
-		panic("unexpected")
+		panic(fmt.Sprintf("unexpected Mode: %d", mode))
 	}
 }
 
-func InitProcess(mode BuildahMode) error {
+// FIXME(ilya-lesikov):
+func ReexecProcess(mode Mode) bool {
 	switch mode {
-	case NativeRootless:
-		if reexec.Init() {
-			return nil
-		}
-
+	case ModeNativeRootless:
 		unshare.MaybeReexecUsingUserNamespace(false)
-
-		return nil
-	case DockerWithFuse:
-		return nil
+		if reexec.Init() {
+			return true
+		}
+	case ModeDockerWithFuse:
+		panic("not implemented")
 	default:
-		panic("unexpected")
+		panic(fmt.Sprintf("unexpected Mode: %d", mode))
 	}
+
+	return false
 }

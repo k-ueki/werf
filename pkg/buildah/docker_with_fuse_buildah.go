@@ -10,7 +10,7 @@ func NewDockerWithFuseBuildah() (*DockerWithFuseBuildah, error) {
 	return nil, nil // TODO
 }
 
-func (buildah *DockerWithFuseBuildah) BuildFromDockerfile(ctx context.Context, dockerfile []byte, opts BuildFromDockerfileOpts) (string, error) {
+func (buildah *DockerWithFuseBuildah) BuildFromDockerfile(ctx context.Context, dockerfile Dockerfile, opts BuildFromDockerfileOpts) (string, error) {
 	panic("not implemented")
 }
 
